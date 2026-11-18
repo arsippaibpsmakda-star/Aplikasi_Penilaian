@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Penilaian Kurikulum Merdeka</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3f5f2;--c:#fff;--t:#17221f;--m:#5d6b66;--p:#0f766e;--pt:#fff;--b:#d8dfda;--ok:#15803d;--bad:#b91c1c}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1513;--c:#18201d;--t:#e8efec;--m:#97a8a1;--p:#3fb5a8;--pt:#06201c;--b:#2a3631;--ok:#4ade80;--bad:#f87171}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:15px/1.5 'Plus Jakarta Sans',system-ui,sans-serif}
+h1,h2,h3{margin:0 0 .6rem;line-height:1.25}h1{font-size:1.5rem;font-weight:800}h2{font-size:1.15rem}
+.wrap{max-width:1000px;margin:0 auto;padding:1rem}
+.card{background:var(--c);border:1px solid var(--b);border-radius:10px;padding:1rem;margin-bottom:1rem}
+label{display:block;font-weight:600;font-size:.85rem;margin:.7rem 0 .25rem}
+input,select,textarea{width:100%;padding:.55rem .65rem;border:1px solid var(--b);border-radius:6px;background:var(--bg);color:var(--t);font:inherit}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--p);outline-offset:1px}
+button{font:inherit;font-weight:600;border:0;border-radius:6px;padding:.55rem 1rem;background:var(--p);color:var(--pt);cursor:pointer}
+button.g{background:transparent;color:var(--p);border:1px solid var(--b)}button.d{background:transparent;color:var(--bad);padding:.2rem .5rem}
+.row{display:flex;gap:.75rem;flex-wrap:wrap}.row>*{flex:1;min-width:140px}
+.nav{display:flex;gap:.25rem;flex-wrap:wrap;margin:.75rem 0 1rem;border-bottom:1px solid var(--b)}
+.nav button{background:none;color:var(--m);border-radius:6px 6px 0 0;border-bottom:3px solid transparent}.nav button.on{color:var(--p);border-color:var(--p)}
+.top{display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap}
+.m{color:var(--m);font-size:.85rem}.stat{font-size:1.8rem;font-weight:800;color:var(--p)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.75rem}
+.sc{overflow-x:auto}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid var(--b);padding:.4rem .5rem;text-align:left;white-space:nowrap}
+th{font-size:.8rem;color:var(--m)}td input{width:70px;padding:.3rem}td.n{text-align:center}
+.tags{display:flex;flex-wrap:wrap;gap:.3rem;padding:.35rem;border:1px solid var(--b);border-radius:6px;background:var(--bg)}
+.tags input{border:0;flex:1;min-width:120px;background:none;padding:.2rem}.chip{background:var(--p);color:var(--pt);border-radius:99px;padding:.1rem .6rem;font-size:.85rem;cursor:pointer}
+.bar{height:8px;background:var(--b);border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--p)}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.pill{padding:.1rem .5rem;border-radius:99px;border:1px solid currentColor;font-size:.8rem}
+#toast{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:var(--t);color:var(--bg);padding:.5rem 1rem;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90%}
+#toast.on{opacity:1}
+@media print{.nav,.top button,.noprint{display:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<div id="toast" role="status"></div>
+<script>
+// === GANTI dengan URL Web App dari Apps Script (berakhiran /exec) ===
+const API = 'https://script.google.com/macros/s/AKfycbzrkI2XHbYVsOaqtzE4dEYcAHoG6QN6DKAz071P4hMke3HKSehyTHwWxSYoE-5sbGwy/exec';
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let S = JSON.parse(localStorage.getItem('sess') || '{}'), P = null, D = null, N = {};
+let sel = {m:'', k:''}, view = 'dash', kktp = 75, tags = {mapel:[], kelas:[]};
+
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.x);toast.x=setTimeout(()=>e.classList.remove('on'),2500)}
+async function api(action, d = {}) {
+  try {
+    const r = await fetch(API, {method:'POST', body:JSON.stringify({action, gid:S.gid, pin:S.pin, key:sessionStorage.getItem('adm'), ...d})});
+    const j = await r.json(); if (j.error) throw j.error; return j;
+  } catch (e) { toast(typeof e === 'string' ? e : 'Gagal terhubung ke server'); throw e; }
+}
+
+/* ---------- Registrasi & masuk ---------- */
+function tagBox(id, label, ph) {
+  return `<label>${label}</label><div class="tags" id="tb-${id}"></div><div class="m">${ph}</div>`;
+}
+function drawTags(id) {
+  const b = $('#tb-' + id); if (!b) return;
+  b.innerHTML = tags[id].map((t, i) => `<span class="chip" data-i="${i}" title="Klik untuk hapus">${esc(t)} ×</span>`).join('') + `<input aria-label="${id}" placeholder="Ketik lalu Enter">`;
+  const inp = b.querySelector('input');
+  const add = () => { const v = inp.value.replace(',', '').trim(); if (v && !tags[id].includes(v)) tags[id].push(v); drawTags(id); $('#tb-' + id + ' input').focus(); };
+  inp.onkeydown = e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(); } };
+  inp.onblur = () => { if (inp.value.trim()) add(); };
+  b.querySelectorAll('.chip').forEach(c => c.onclick = () => { tags[id].splice(+c.dataset.i, 1); drawTags(id); });
+}
+function thn() { const y = new Date().getFullYear(), m = new Date().getMonth(); const a = m >= 6 ? y : y - 1; return a + '/' + (a + 1); }
+function formPeriode(akun) {
+  tags = {mapel:[], kelas:[]};
+  return `${akun ? `<label>Nama lengkap</label><input id="f-nama" autocomplete="name">
+  <label>PIN (min. 4 karakter, untuk masuk kembali)</label><input id="f-pin" type="password" autocomplete="new-password">` : ''}
+  <div class="row"><div><label>Nama sekolah</label><input id="f-sek" value="${esc(P?.sekolah || '')}"></div>
+  <div><label>Jenjang</label><select id="f-jen">${['SD/MI','SMP/MTs','SMA/MA','SMK'].map(j => `<option ${P?.jenjang === j ? 'selected' : ''}>${j}</option>`).join('')}</select></div></div>
+  <div class="row"><div><label>Tahun ajaran</label><input id="f-th" value="${thn()}"></div>
+  <div><label>Semester</label><select id="f-sem"><option>Ganjil</option><option>Genap</option></select></div></div>
+  ${tagBox('mapel', 'Mata pelajaran yang diampu', 'Bisa lebih dari satu, mis. Matematika, IPA')}
+  ${tagBox('kelas', 'Kelas yang diampu', 'Bisa lebih dari satu, mis. 7A, 7B, 8C')}`;
+}
+function bacaPeriode() {
+  return {sekolah:$('#f-sek').value.trim(), jenjang:$('#f-jen').value, tahunAjaran:$('#f-th').value.trim(), semester:$('#f-sem').value, mapel:tags.mapel, kelas:tags.kelas};
+}
+function showAuth(mode = 'daftar') {
+  $('#app').innerHTML = `<div class="card" style="max-width:640px;margin:2rem auto"><h1>Penilaian Kurikulum Merdeka</h1>
+  <div class="nav"><button class="${mode === 'daftar' ? 'on' : ''}" id="t1">Registrasi guru</button><button class="${mode === 'masuk' ? 'on' : ''}" id="t2">Sudah terdaftar</button></div>
+  <div id="fm"></div><p class="m"><a href="#admin" id="adm">Masuk sebagai admin / wali kelas</a></p></div>`;
+  $('#adm').onclick = e => { e.preventDefault(); showAdmin(); };
+  $('#t1').onclick = () => showAuth('daftar'); $('#t2').onclick = () => showAuth('masuk');
+  if (mode === 'daftar') {
+    $('#fm').innerHTML = formPeriode(true) + `<p><button id="go">Daftar dan mulai</button></p>`;
+    drawTags('mapel'); drawTags('kelas');
+    $('#go').onclick = async () => {
+      const r = await api('register', {nama:$('#f-nama').value, pin:$('#f-pin').value, ...bacaPeriode()});
+      S = {gid:r.gid, pin:$('#f-pin').value, nama:r.nama}; localStorage.setItem('sess', JSON.stringify(S)); pilihPeriode(r.periods);
+    };
+  } else {
+    $('#fm').innerHTML = `<label>Nama lengkap</label><input id="l-nama"><label>PIN</label><input id="l-pin" type="password"><p><button id="go">Masuk</button></p>`;
+    $('#go').onclick = async () => {
+      const pin = $('#l-pin').value, r = await api('login', {nama:$('#l-nama').value, pin});
+      S = {gid:r.gid, pin, nama:r.nama}; localStorage.setItem('sess', JSON.stringify(S)); pilihPeriode(r.periods);
+    };
+  }
+}
+
+/* ---------- Pilih / buat periode ---------- */
+function pilihPeriode(list) {
+  $('#app').innerHTML = `<div class="top"><h1>Halo, ${esc(S.nama)}</h1><button class="g" id="out">Keluar</button></div>
+  <h2>Pilih periode</h2>${list.map(p => `<div class="card top"><div><b>${esc(p.tahunAjaran)} – ${esc(p.semester)}</b><div class="m">${esc(p.sekolah)} (${esc(p.jenjang)}) · ${p.mapel.map(esc).join(', ')} · Kelas ${p.kelas.map(esc).join(', ')}</div></div><button data-id="${p.id}">Buka</button></div>`).join('')}
+  <div class="card"><h2>Registrasi semester / tahun ajaran baru</h2>${formPeriode(false)}<p><button id="go">Daftarkan periode baru</button></p></div>`;
+  drawTags('mapel'); drawTags('kelas');
+  $('#out').onclick = () => { localStorage.removeItem('sess'); S = {}; showAuth(); };
+  document.querySelectorAll('button[data-id]').forEach(b => b.onclick = () => bukaPeriode(list.find(p => p.id === b.dataset.id)));
+  $('#go').onclick = async () => { const r = await api('periodeBaru', bacaPeriode()); toast('Periode terdaftar'); pilihPeriode(r.periods); };
+  window.PL = list;
+}
+async function bukaPeriode(p) {
+  P = p; D = await api('data', {pid:p.id}); N = {};
+  D.nilai.forEach(n => N[n.tpId + '|' + n.siswaId] = n.nilai);
+  sel = {m:p.mapel[0], k:p.kelas[0]}; view = 'dash'; render();
+}
+
+/* ---------- Kerangka aplikasi ---------- */
+const MENU = {dash:'Dashboard', input:'Input nilai', rekap:'Rekapitulasi', progres:'Progres siswa'};
+function render() {
+  $('#app').innerHTML = `<div class="top"><div><h1>${esc(P.sekolah)}</h1><div class="m">${esc(P.tahunAjaran)} · Semester ${esc(P.semester)} · ${esc(S.nama)}</div></div>
+  <button class="g" id="ganti">Ganti periode</button></div>
+  <div class="nav">${Object.entries(MENU).map(([k, v]) => `<button data-v="${k}" class="${view === k ? 'on' : ''}">${v}</button>`).join('')}</div><div id="v"></div>`;
+  document.querySelectorAll('.nav button').forEach(b => b.onclick = () => { view = b.dataset.v; render(); });
+  $('#ganti').onclick = async () => pilihPeriode((await api('periods')).periods);
+  ({dash:vDash, input:vInput, rekap:vRekap, progres:vProgres})[view]();
+}
+const tpList = (m = sel.m, k = sel.k) => D.tp.filter(t => t.mapel === m && t.kelas === k);
+const siswaList = (k = sel.k) => D.siswa.filter(s => s.kelas === k).sort((a, b) => a.nama.localeCompare(b.nama));
+const nl = (t, s) => { const v = N[t + '|' + s]; return v === '' || v === undefined ? null : Number(v); };
+function rata(sid, tps) { const v = tps.map(t => nl(t.id, sid)).filter(x => x !== null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; }
+const f1 = x => x === null ? '–' : (Math.round(x * 10) / 10).toString();
+function picker(extra = '') {
+  return `<div class="row noprint"><div><label>Mata pelajaran</label><select id="sm">${P.mapel.map(m => `<option ${m === sel.m ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select></div>
+  <div><label>Kelas</label><select id="sk">${P.kelas.map(k => `<option ${k === sel.k ? 'selected' : ''}>${esc(k)}</option>`).join('')}</select></div>${extra}</div>`;
+}
+function bindPicker() { $('#sm').onchange = e => { sel.m = e.target.value; render(); }; $('#sk').onchange = e => { sel.k = e.target.value; render(); }; }
+
+/* ---------- Dashboard ---------- */
+function vDash() {
+  const kelasRows = P.mapel.flatMap(m => P.kelas.map(k => {
+    const t = tpList(m, k), s = siswaList(k), tot = t.length * s.length;
+    const isi = t.reduce((a, x) => a + s.filter(y => nl(x.id, y.id) !== null).length, 0);
+    const r = s.map(y => rata(y.id, t)).filter(x => x !== null);
+    return {m, k, t:t.length, s:s.length, pct:tot ? Math.round(isi / tot * 100) : 0, avg:r.length ? r.reduce((a, b) => a + b, 0) / r.length : null};
+  }));
+  $('#v').innerHTML = `<div class="grid"><div class="card"><div class="stat">${P.mapel.length}</div>Mata pelajaran</div><div class="card"><div class="stat">${P.kelas.length}</div>Kelas</div>
+  <div class="card"><div class="stat">${D.tp.length}</div>Tujuan pembelajaran</div><div class="card"><div class="stat">${D.siswa.length}</div>Siswa</div></div>
+  <div class="card sc"><h2>Ringkasan per mapel dan kelas</h2><table><tr><th>Mapel</th><th>Kelas</th><th>TP</th><th>Siswa</th><th>Kelengkapan nilai</th><th>Rata-rata kelas</th></tr>
+  ${kelasRows.map(r => `<tr><td>${esc(r.m)}</td><td>${esc(r.k)}</td><td>${r.t}</td><td>${r.s}</td><td style="min-width:140px"><div class="bar"><i style="width:${r.pct}%"></i></div><span class="m">${r.pct}%</span></td><td>${f1(r.avg)}</td></tr>`).join('')}</table></div>`;
+}
+
+/* ---------- Input nilai ---------- */
+function vInput() {
+  const t = tpList(), s = siswaList();
+  $('#v').innerHTML = `<div class="card">${picker()}</div>
+  <div class="card"><h2>Tujuan pembelajaran / bab / tema</h2>
+  ${t.map((x, i) => `<div class="top"><span>${i + 1}. ${esc(x.judul)}</span><button class="d" data-del="${x.id}">Hapus</button></div>`).join('') || '<p class="m">Belum ada TP. Tambahkan di bawah.</p>'}
+  <div class="row"><input id="tpj" placeholder="mis. Bab 1 – Bilangan bulat"><button id="tpa" style="flex:0">Tambah</button></div></div>
+  <div class="card"><h2>Daftar siswa kelas ${esc(sel.k)}</h2>
+  <details ${s.length ? '' : 'open'}><summary class="m">Tambah siswa (satu nama per baris)</summary><textarea id="sdf" rows="5"></textarea><p><button id="sda">Simpan siswa</button></p></details></div>
+  <div class="card sc"><h2>Nilai <span class="m" id="st"></span></h2>${!t.length || !s.length ? '<p class="m">Tambahkan TP dan siswa terlebih dahulu.</p>' :
+  `<table><tr><th>Siswa</th>${t.map((x, i) => `<th title="${esc(x.judul)}">TP ${i + 1}</th>`).join('')}</tr>
+  ${s.map(y => `<tr><td>${esc(y.nama)}</td>${t.map(x => `<td><input type="number" min="0" max="100" inputmode="decimal" data-t="${x.id}" data-s="${y.id}" value="${nl(x.id, y.id) ?? ''}" aria-label="${esc(y.nama)} TP"></td>`).join('')}</tr>`).join('')}</table>`}</div>`;
+  bindPicker();
+  $('#tpa').onclick = async () => { const j = $('#tpj').value.trim(); if (!j) return; const r = await api('tambahTP', {pid:P.id, mapel:sel.m, kelas:sel.k, judul:j}); D.tp.push(r.tp); vInput(); };
+  document.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { if (!confirm('Hapus TP ini beserta nilainya?')) return; await api('hapusTP', {pid:P.id, tpId:b.dataset.del}); D.tp = D.tp.filter(x => x.id !== b.dataset.del); vInput(); });
+  $('#sda').onclick = async () => { const r = await api('tambahSiswa', {pid:P.id, kelas:sel.k, daftar:$('#sdf').value}); D.siswa.push(...r.siswa); toast(r.siswa.length + ' siswa ditambahkan'); vInput(); };
+  document.querySelectorAll('td input').forEach(i => i.onchange = async () => {
+    const v = i.value.trim(), n = Number(v);
+    if (v !== '' && (isNaN(n) || n < 0 || n > 100)) { toast('Nilai harus 0–100'); i.value = nl(i.dataset.t, i.dataset.s) ?? ''; return; }
+    $('#st').textContent = 'Menyimpan…';
+    try { await api('nilai', {pid:P.id, tpId:i.dataset.t, siswaId:i.dataset.s, nilai:v}); N[i.dataset.t + '|' + i.dataset.s] = v; $('#st').textContent = 'Tersimpan ✓'; }
+    catch (e) { $('#st').textContent = 'Gagal menyimpan'; }
+  });
+}
+
+/* ---------- Rekap ---------- */
+function vRekap() {
+  const t = tpList(), s = siswaList();
+  $('#v').innerHTML = `<div class="card">${picker(`<div><label>KKTP (batas tuntas)</label><input id="kk" type="number" value="${kktp}"></div>`)}</div>
+  <div class="card sc"><div class="top"><h2>Rekap ${esc(sel.m)} – Kelas ${esc(sel.k)}</h2><button class="g" onclick="print()">Cetak</button></div>
+  <table><tr><th>No</th><th>Siswa</th>${t.map((x, i) => `<th title="${esc(x.judul)}">TP ${i + 1}</th>`).join('')}<th>Rata-rata</th><th>Keterangan</th></tr>
+  ${s.map((y, i) => { const r = rata(y.id, t); return `<tr><td>${i + 1}</td><td>${esc(y.nama)}</td>${t.map(x => `<td class="n ${nl(x.id, y.id) !== null && nl(x.id, y.id) < kktp ? 'bad' : ''}">${f1(nl(x.id, y.id))}</td>`).join('')}<td class="n"><b>${f1(r)}</b></td><td>${r === null ? '–' : r >= kktp ? '<span class="pill ok">Tuntas</span>' : '<span class="pill bad">Perlu bimbingan</span>'}</td></tr>`; }).join('')}
+  <tr><th></th><th>Rata-rata TP</th>${t.map(x => { const v = s.map(y => nl(x.id, y.id)).filter(z => z !== null); return `<th class="n">${f1(v.length ? v.reduce((a, b) => a + b, 0) / v.length : null)}</th>`; }).join('')}<th></th><th></th></tr></table>
+  ${t.map((x, i) => `<div class="m">TP ${i + 1}: ${esc(x.judul)}</div>`).join('')}</div>`;
+  bindPicker(); $('#kk').onchange = e => { kktp = +e.target.value || 75; vRekap(); };
+}
+
+/* ---------- Progres ---------- */
+function spark(vals) {
+  const pts = vals.map((v, i) => v === null ? null : [vals.length < 2 ? 50 : i * 100 / (vals.length - 1), 28 - v / 100 * 26]).filter(Boolean);
+  if (pts.length < 2) return '';
+  return `<svg width="110" height="32" viewBox="-4 0 108 32" aria-hidden="true"><polyline points="${pts.map(p => p.join(',')).join(' ')}" fill="none" stroke="var(--p)" stroke-width="2"/><circle cx="${pts.at(-1)[0]}" cy="${pts.at(-1)[1]}" r="3" fill="var(--p)"/></svg>`;
+}
+function vProgres() {
+  const t = tpList(), s = siswaList();
+  $('#v').innerHTML = `<div class="card">${picker()}</div><div class="card sc"><h2>Perkembangan ${esc(sel.m)} – Kelas ${esc(sel.k)}</h2>
+  <p class="m">Urutan TP dari yang pertama hingga terbaru. Tren membandingkan nilai terakhir dengan nilai sebelumnya.</p>
+  <table><tr><th>Siswa</th><th>Grafik</th><th>Terakhir</th><th>Tren</th><th>Perlu perhatian</th></tr>
+  ${s.map(y => { const v = t.map(x => nl(x.id, y.id)), f = v.filter(z => z !== null), last = f.at(-1) ?? null, prev = f.length > 1 ? f.at(-2) : null, d = prev === null ? null : last - prev;
+    const low = t.filter((x, i) => v[i] !== null && v[i] < kktp).length;
+    return `<tr><td>${esc(y.nama)}</td><td>${spark(v)}</td><td class="n">${f1(last)}</td><td>${d === null ? '–' : d > 0 ? `<span class="ok">▲ +${f1(d)}</span>` : d < 0 ? `<span class="bad">▼ ${f1(d)}</span>` : '■ tetap'}</td><td>${low ? `<span class="bad">${low} TP di bawah KKTP (${kktp})</span>` : f.length ? '<span class="ok">Aman</span>' : '–'}</td></tr>`; }).join('')}</table></div>`;
+  bindPicker();
+}
+
+/* ---------- Admin / wali kelas ---------- */
+let A = {tab:'guru', rows:[], guru:[], opsi:[], periode:'', kelas:''};
+const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+function showAdmin() {
+  if (sessionStorage.getItem('adm')) return adminMuat().catch(() => { sessionStorage.removeItem('adm'); showAdmin(); });
+  $('#app').innerHTML = `<div class="card" style="max-width:420px;margin:2rem auto"><h1>Masuk admin</h1><label>Kunci admin</label><input id="ak" type="password"><p><button id="go">Masuk</button> <button class="g" id="bk">Kembali</button></p></div>`;
+  $('#bk').onclick = () => { location.hash = ''; showAuth(); };
+  $('#go').onclick = () => { sessionStorage.setItem('adm', $('#ak').value); showAdmin(); };
+}
+async function adminMuat() { const r = await api('adminInfo'); A.guru = r.guru; A.opsi = r.opsi; A.periode = A.periode || r.opsi.at(-1) || ''; A.rows = []; adminRender(); }
+function adminRender() {
+  const R = A.rows, kl = [...new Set(R.map(x => x.kelas))].sort(); if (!kl.includes(A.kelas)) A.kelas = kl[0] || '';
+  let isi = '<p class="m">Pilih periode lalu klik "Muat rekap".</p>';
+  if (A.tab === 'guru' && R.length) {
+    const g = {}; R.forEach(x => { const o = g[[x.guru, x.mapel, x.kelas].join('§')] ||= {x, n:0, isi:0, tot:0, v:[]}; o.n++; o.isi += x.isi; o.tot += x.tp; if (x.rata !== null) o.v.push(x.rata); });
+    isi = `<div class="sc"><table><tr><th>Guru</th><th>Mapel</th><th>Kelas</th><th>Siswa</th><th>Kelengkapan</th><th>Rata-rata</th></tr>${Object.values(g).map(o => `<tr><td>${esc(o.x.guru)}</td><td>${esc(o.x.mapel)}</td><td>${esc(o.x.kelas)}</td><td>${o.n}</td><td style="min-width:130px"><div class="bar"><i style="width:${o.tot ? Math.round(o.isi / o.tot * 100) : 0}%"></i></div><span class="m">${o.tot ? Math.round(o.isi / o.tot * 100) : 0}%</span></td><td>${f1(avg(o.v))}</td></tr>`).join('')}</table></div>`;
+  }
+  if (A.tab === 'kelas' && R.length) {
+    const rk = R.filter(x => x.kelas === A.kelas), mp = [...new Set(rk.map(x => x.mapel))].sort(), sm = {};
+    rk.forEach(x => { const o = sm[x.siswa.trim().toLowerCase()] ||= {n:x.siswa, m:{}}; (o.m[x.mapel] ||= []); if (x.rata !== null) o.m[x.mapel].push(x.rata); });
+    isi = `<div class="noprint"><label>Kelas (wali kelas)</label><select id="ak2">${kl.map(k => `<option ${k === A.kelas ? 'selected' : ''}>${esc(k)}</option>`).join('')}</select></div>
+    <div class="top"><h2>Rekap kelas ${esc(A.kelas)} · ${esc(A.periode.replace('|', ' – '))}</h2><button class="g" onclick="print()">Cetak</button></div><div class="sc"><table><tr><th>Siswa</th>${mp.map(m => `<th>${esc(m)}</th>`).join('')}<th>Rata-rata</th></tr>
+    ${Object.values(sm).sort((a, b) => a.n.localeCompare(b.n)).map(o => { const c = mp.map(m => avg(o.m[m] || [])), t = avg(c.filter(z => z !== null)); return `<tr><td>${esc(o.n)}</td>${c.map(z => `<td class="n ${z !== null && z < kktp ? 'bad' : ''}">${f1(z)}</td>`).join('')}<td class="n"><b>${f1(t)}</b></td></tr>`; }).join('')}</table></div>`;
+  }
+  if (A.tab === 'akun') isi = `<div class="sc"><table><tr><th>Guru</th><th>Terdaftar</th><th></th></tr>${A.guru.map(g => `<tr><td>${esc(g.nama)}</td><td class="m">${esc(String(g.dibuat).slice(0, 10))}</td><td><button class="g" data-r="${g.id}">Reset PIN</button></td></tr>`).join('')}</table></div>`;
+  $('#app').innerHTML = `<div class="top"><h1>Admin / wali kelas</h1><button class="g noprint" id="ke">Keluar</button></div>
+  <div class="card noprint"><div class="row"><div><label>Periode</label><select id="ap">${A.opsi.map(o => `<option value="${esc(o)}" ${o === A.periode ? 'selected' : ''}>${esc(o.replace('|', ' – '))}</option>`).join('')}</select></div><div style="display:flex;align-items:end"><button id="mm">Muat rekap</button></div></div></div>
+  <div class="nav">${[['guru', 'Per guru'], ['kelas', 'Per kelas (wali kelas)'], ['akun', 'Akun guru']].map(([k, v]) => `<button data-v="${k}" class="${A.tab === k ? 'on' : ''}">${v}</button>`).join('')}</div><div class="card">${isi}</div>`;
+  $('#ke').onclick = () => { sessionStorage.removeItem('adm'); location.hash = ''; showAuth(); };
+  $('#ap').onchange = e => A.periode = e.target.value;
+  $('#mm').onclick = async () => { toast('Memuat rekap, bisa beberapa detik…'); A.rows = (await api('adminRekap', {periode:A.periode})).rows; adminRender(); };
+  document.querySelectorAll('.nav button').forEach(b => b.onclick = () => { A.tab = b.dataset.v; adminRender(); });
+  if ($('#ak2')) $('#ak2').onchange = e => { A.kelas = e.target.value; adminRender(); };
+  document.querySelectorAll('[data-r]').forEach(b => b.onclick = async () => { const p = prompt('PIN baru (min. 4 karakter):'); if (p) { await api('adminReset', {guruId:b.dataset.r, pinBaru:p}); toast('PIN direset'); } });
+}
+
+/* ---------- Mulai ---------- */
+(async function () {
+  if (S.gid) { try { pilihPeriode((await api('periods')).periods); return; } catch (e) { localStorage.removeItem('sess'); S = {}; } }
+  showAuth();
+})();
+if (location.hash === '#admin') showAdmin();
+</script>
+</body>
+</html>
